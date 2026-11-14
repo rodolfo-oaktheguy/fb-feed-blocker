@@ -56,12 +56,6 @@ public class FeedBlockerService extends AccessibilityService {
             return;
         }
 
-        // Still in cooldown from a previous kick: no access at all.
-        if (System.currentTimeMillis() < p.getLong(Prefs.LOCKED_UNTIL, 0)) {
-            kick("Feed Blocker: still on cooldown.", false);
-            return;
-        }
-
         // New visit: different app, or no events for 30 s (you left and came back).
         boolean newVisit = !pkg.equals(currentPkg) || sessionStart == 0 || now - lastEvent > 30_000;
         lastEvent = now;
@@ -166,11 +160,6 @@ public class FeedBlockerService extends AccessibilityService {
         scrollCount = 0;
         sessionStart = 0;
         currentPkg = null;
-        if (startCooldown) {
-            int cd = Prefs.get(this).getInt(Prefs.COOLDOWN_MIN, 0);
-            if (cd > 0) Prefs.get(this).edit()
-                    .putLong(Prefs.LOCKED_UNTIL, System.currentTimeMillis() + cd * 60_000L).apply();
-        }
         if (openChats()) {
             Toast.makeText(this, "No feed scrolling 🙅 Sent you to Chats.", Toast.LENGTH_SHORT).show();
             return;
