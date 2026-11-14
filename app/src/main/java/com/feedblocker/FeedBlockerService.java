@@ -47,6 +47,10 @@ public class FeedBlockerService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
+        try { handle(e); } catch (Throwable t) { android.util.Log.w("FeedBlocker", t); }
+    }
+
+    private void handle(AccessibilityEvent e) {
         if (e.getPackageName() == null) return;
         String pkg = e.getPackageName().toString();
         SharedPreferences p = Prefs.get(this);
@@ -141,7 +145,7 @@ public class FeedBlockerService extends AccessibilityService {
                     return true;
                 }
             }
-            for (int i = 0; i < n.getChildCount(); i++) q.add(n.getChild(i));
+            for (int i = 0; i < n.getChildCount(); i++) { AccessibilityNodeInfo ch = n.getChild(i); if (ch != null) q.add(ch); }
         }
         return false;
     }
@@ -164,7 +168,7 @@ public class FeedBlockerService extends AccessibilityService {
             if (t != null && n.isVisibleToUser() && CHAT_LABEL.matcher(t.toString().trim()).matches()
                     && (n.isSelected() || n.isEditable()
                         || (android.os.Build.VERSION.SDK_INT >= 28 && n.isHeading()))) { inChats = true; break; }
-            for (int i = 0; i < n.getChildCount(); i++) q.add(n.getChild(i));
+            for (int i = 0; i < n.getChildCount(); i++) { AccessibilityNodeInfo ch = n.getChild(i); if (ch != null) q.add(ch); }
         }
         return inChats;
     }
