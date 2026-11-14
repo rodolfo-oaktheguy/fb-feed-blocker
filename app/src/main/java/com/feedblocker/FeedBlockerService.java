@@ -35,6 +35,8 @@ public class FeedBlockerService extends AccessibilityService {
     // FB Lite fallback: frequent content changes while it is in front look like scrolling
     private long liteBurstStart = 0;
     private int liteBurst = 0;
+    private int liteBusySeconds = 0;      // consecutive busy seconds
+    private static final long OPEN_GRACE_MS = 5000;  // ignore the redraw storm when the app opens
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent e) {
@@ -68,9 +70,10 @@ public class FeedBlockerService extends AccessibilityService {
             sessionStart = now;
             scrollCount = 0;
             liteBurst = 0;
+            liteBusySeconds = 0;
         }
 
-        int sessionMin = p.getInt(Prefs.SESSION_MIN, 3);
+        int sessionMin = p.getInt(Prefs.SESSION_MIN, 0);
         if (sessionMin > 0 && now - sessionStart > sessionMin * 60_000L) {
             kick("Time's up on Facebook. Go do something real.", true);
             return;
@@ -78,16 +81,53 @@ public class FeedBlockerService extends AccessibilityService {
 
         int limit = p.getInt(Prefs.SCROLL_LIMIT, 0);
         if (e.getEventType() == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            if (now - sessionStart < 1500) return;   // the feed jumps to top when it loads
             if (now - lastScroll < SCROLL_DEBOUNCE_MS) return;
             lastScroll = now;
             if (countScroll(now) > limit) kick("No feed scrolling 🙅", true);
         } else if (pkg.equals(LITE) && e.getEventType() == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-            if (now - liteBurstStart > 2000) { liteBurstStart = now; liteBurst = 0; }
-            if (++liteBurst >= 25) {           // sustained redraw = scrolling the feed
+            if (now - sessionStart < OPEN_GRACE_MS) return;
+            // Scrolling the feed redraws constantly for several seconds in a row;
+            // opening a screen or loading a post is one short burst.
+            if (now - liteBurstStart >= 1000) {
+                liteBusySeconds = (liteBurst >= 8 && now - liteBurstStart < 2000) ? liteBusySeconds + 1 : 0;
+                liteBurstStart = now;
                 liteBurst = 0;
-                if (now - lastScroll > 1500) { lastScroll = now; if (countScroll(now) > limit) kick("No feed scrolling 🙅", true); }
+            }
+            liteBurst++;
+            if (liteBusySeconds >= 3) {
+                liteBusySeconds = 0;
+                if (countScroll(now) > limit) kick("No feed scrolling 🙅", true);
             }
         }
+    }
+
+    private static final Pattern CHATS_BUTTON = Pattern.compile(
+            "(?i)^(chats?|messenger|messages?|messaging)\\b.*");
+
+    /** Taps the app's Chats / Messenger button (FB Lite tab, or the Messenger icon in Facebook). */
+    private boolean openChats() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        ArrayDeque<AccessibilityNodeInfo> q = new ArrayDeque<>();
+        q.add(root);
+        int seen = 0;
+        while (!q.isEmpty() && seen++ < 600) {
+            AccessibilityNodeInfo n = q.poll();
+            if (n == null) continue;
+            CharSequence t = n.getContentDescription() != null ? n.getContentDescription() : n.getText();
+            if (t != null && !n.isEditable() && n.isVisibleToUser()
+                    && CHATS_BUTTON.matcher(t.toString().trim()).matches()) {
+                AccessibilityNodeInfo c = n;
+                for (int up = 0; c != null && !c.isClickable() && up < 4; up++) c = c.getParent();
+                if (c != null && c.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                    lastChatCheck = 0;   // re-check right away: we are about to be in Chats
+                    return true;
+                }
+            }
+            for (int i = 0; i < n.getChildCount(); i++) q.add(n.getChild(i));
+        }
+        return false;
     }
 
     /** True when FB Lite shows a chat or the chat list: a message box or a Chats/Messenger label. */
@@ -127,11 +167,15 @@ public class FeedBlockerService extends AccessibilityService {
         sessionStart = 0;
         currentPkg = null;
         if (startCooldown) {
-            int cd = Prefs.get(this).getInt(Prefs.COOLDOWN_MIN, 10);
+            int cd = Prefs.get(this).getInt(Prefs.COOLDOWN_MIN, 0);
             if (cd > 0) Prefs.get(this).edit()
                     .putLong(Prefs.LOCKED_UNTIL, System.currentTimeMillis() + cd * 60_000L).apply();
         }
-        performGlobalAction(GLOBAL_ACTION_HOME);
+        if (openChats()) {
+            Toast.makeText(this, "No feed scrolling 🙅 Sent you to Chats.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        performGlobalAction(GLOBAL_ACTION_HOME);   // no Chats button found: fall back to Home
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
     }
 
