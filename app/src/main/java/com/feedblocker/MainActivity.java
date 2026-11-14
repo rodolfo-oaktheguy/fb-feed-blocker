@@ -16,7 +16,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
-    private EditText scrolls, minutes, cooldown;
+    private EditText scrolls, minutes;
     private CheckBox fb, lite;
     private TextView status;
 
@@ -46,8 +46,7 @@ public class MainActivity extends Activity {
         fb = check(l, "Block Facebook", p.getBoolean(Prefs.BLOCK_FB, true));
         lite = check(l, "Block Facebook Lite", p.getBoolean(Prefs.BLOCK_LITE, true));
         scrolls = number(l, "Scrolls allowed per minute (0 = none)", p.getInt(Prefs.SCROLL_LIMIT, 0));
-        minutes = number(l, "Max minutes per visit (0 = no limit)", p.getInt(Prefs.SESSION_MIN, 3));
-        cooldown = number(l, "Locked out for this many minutes after a kick", p.getInt(Prefs.COOLDOWN_MIN, 10));
+        minutes = number(l, "Max minutes per visit (0 = no limit)", p.getInt(Prefs.SESSION_MIN, 0));
 
         Button save = new Button(this);
         save.setText("Save");
@@ -55,8 +54,8 @@ public class MainActivity extends Activity {
             p.edit().putBoolean(Prefs.BLOCK_FB, fb.isChecked())
                     .putBoolean(Prefs.BLOCK_LITE, lite.isChecked())
                     .putInt(Prefs.SCROLL_LIMIT, read(scrolls, 0))
-                    .putInt(Prefs.SESSION_MIN, read(minutes, 3))
-                    .putInt(Prefs.COOLDOWN_MIN, read(cooldown, 10)).apply();
+                    .putInt(Prefs.SESSION_MIN, read(minutes, 0)).apply();
+            p.edit().putLong(Prefs.LOCKED_UNTIL, 0).apply();
             Toast.makeText(this, "Saved", Toast.LENGTH_SHORT).show();
         });
         l.addView(save);
