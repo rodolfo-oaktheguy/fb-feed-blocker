@@ -64,7 +64,8 @@ public class FeedBlockerService extends AccessibilityService {
         }
 
         // FB Lite: if the Home (newsfeed) tab is highlighted, tap Messenger.
-        if (pkg.equals(LITE) && Build.VERSION.SDK_INT >= 30 && now - lastShot > 700 && !shotPending) {
+        if (shotPending && now - lastShot > 3000) shotPending = false;   // never stay stuck
+        if ((pkg.equals(LITE) || pkg.equals(FB)) && Build.VERSION.SDK_INT >= 30 && now - lastShot > 700 && !shotPending) {
             lastShot = now;
             checkFeedByScreenshot();
         }
@@ -171,6 +172,7 @@ public class FeedBlockerService extends AccessibilityService {
     // ---- Screen check for FB Lite (it hides its UI from accessibility) ----
     private long lastShot = 0;
     private boolean shotPending = false;
+    private boolean warnedShot = false;
     private float messengerY = -1;   // last seen y of the tab row, in pixels
 
     private void checkFeedByScreenshot() {
@@ -193,7 +195,14 @@ public class FeedBlockerService extends AccessibilityService {
                         Toast.makeText(FeedBlockerService.this, "No newsfeed 🙅 Sent you to Messages.", Toast.LENGTH_SHORT).show();
                     }
                 }
-                @Override public void onFailure(int code) { shotPending = false; }
+                @Override public void onFailure(int code) {
+                    shotPending = false;
+                    if (!warnedShot) {
+                        warnedShot = true;
+                        Toast.makeText(FeedBlockerService.this, "Feed Blocker can't see the screen (code " + code
+                                + "). Turn it off and on in Accessibility.", Toast.LENGTH_LONG).show();
+                    }
+                }
             });
         } catch (Throwable t) { shotPending = false; }
     }
