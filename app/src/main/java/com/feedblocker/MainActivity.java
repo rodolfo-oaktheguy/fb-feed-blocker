@@ -17,7 +17,7 @@ import android.widget.Toast;
 
 public class MainActivity extends Activity {
     private EditText scrolls, minutes;
-    private CheckBox fb, lite;
+    private CheckBox fb, lite, liteFull;
     private TextView status;
 
     @Override
@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
 
         fb = check(l, "Block Facebook", p.getBoolean(Prefs.BLOCK_FB, true));
         lite = check(l, "Block Facebook Lite", p.getBoolean(Prefs.BLOCK_LITE, true));
+        liteFull = check(l, "Block FB Lite completely (use Messenger for messages)", p.getBoolean(Prefs.LITE_FULL, true));
         scrolls = number(l, "Scrolls allowed per minute (0 = none)", p.getInt(Prefs.SCROLL_LIMIT, 0));
         minutes = number(l, "Max minutes per visit (0 = no limit)", p.getInt(Prefs.SESSION_MIN, 0));
 
@@ -53,6 +54,7 @@ public class MainActivity extends Activity {
         save.setOnClickListener(v -> {
             p.edit().putBoolean(Prefs.BLOCK_FB, fb.isChecked())
                     .putBoolean(Prefs.BLOCK_LITE, lite.isChecked())
+                    .putBoolean(Prefs.LITE_FULL, liteFull.isChecked())
                     .putInt(Prefs.SCROLL_LIMIT, read(scrolls, 0))
                     .putInt(Prefs.SESSION_MIN, read(minutes, 0)).apply();
             p.edit().putLong(Prefs.LOCKED_UNTIL, 0).apply();

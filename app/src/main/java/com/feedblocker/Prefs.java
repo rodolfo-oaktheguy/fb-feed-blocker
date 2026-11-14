@@ -10,6 +10,7 @@ final class Prefs {
     static final String COOLDOWN_MIN = "cooldown_minutes";   // locked out after a kick
     static final String BLOCK_FB = "block_fb";
     static final String BLOCK_LITE = "block_lite";
+    static final String LITE_FULL = "lite_full_block";
     static final String LOCKED_UNTIL = "locked_until";
 
     static SharedPreferences get(Context c) {

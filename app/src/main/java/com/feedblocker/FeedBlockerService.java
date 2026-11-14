@@ -48,6 +48,14 @@ public class FeedBlockerService extends AccessibilityService {
         long now = SystemClock.elapsedRealtime();
         if (now - lastKick < 1500) return;
 
+        // Full block: FB Lite closes the moment it shows anything. Messages go through the Messenger app.
+        if (pkg.equals(LITE) && p.getBoolean(Prefs.LITE_FULL, true)) {
+            lastKick = now;
+            performGlobalAction(GLOBAL_ACTION_HOME);
+            Toast.makeText(this, "FB Lite is blocked. Use Messenger for messages.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         // In FB Lite's chats: no scroll limit, no time limit, even during a cooldown.
         if (pkg.equals(LITE) && isInChats(now)) {
             sessionStart = now;
