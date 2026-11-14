@@ -2,6 +2,18 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.feedblocker'
     compileSdk 34
+    signingConfigs {
+        // One fixed key, so every GitHub build can install over the previous one
+        fixed {
+            storeFile file('feedblocker.keystore')
+            storePassword 'feedblocker'
+            keyAlias 'feedblocker'
+            keyPassword 'feedblocker'
+        }
+    }
+    buildTypes {
+        debug { signingConfig signingConfigs.fixed }
+    }
     defaultConfig {
         applicationId 'com.feedblocker'
         minSdk 26
