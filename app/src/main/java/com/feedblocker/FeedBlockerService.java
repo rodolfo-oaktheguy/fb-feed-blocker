@@ -1,6 +1,13 @@
 package com.feedblocker;
 
 import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Bitmap;
+import android.graphics.Path;
+import android.hardware.HardwareBuffer;
+import android.os.Build;
+import android.util.DisplayMetrics;
+import android.view.Display;
 import android.content.SharedPreferences;
 import android.os.SystemClock;
 import android.view.accessibility.AccessibilityEvent;
@@ -49,11 +56,17 @@ public class FeedBlockerService extends AccessibilityService {
         if (now - lastKick < 1500) return;
 
         // Full block: FB Lite closes the moment it shows anything. Messages go through the Messenger app.
-        if (pkg.equals(LITE) && p.getBoolean(Prefs.LITE_FULL, true)) {
+        if (pkg.equals(LITE) && p.getBoolean(Prefs.LITE_FULL, false)) {
             lastKick = now;
             performGlobalAction(GLOBAL_ACTION_HOME);
             Toast.makeText(this, "FB Lite is blocked. Use Messenger for messages.", Toast.LENGTH_SHORT).show();
             return;
+        }
+
+        // FB Lite: if the Home (newsfeed) tab is highlighted, tap Messenger.
+        if (pkg.equals(LITE) && Build.VERSION.SDK_INT >= 30 && now - lastShot > 700 && !shotPending) {
+            lastShot = now;
+            checkFeedByScreenshot();
         }
 
         // In FB Lite's chats: no scroll limit, no time limit, even during a cooldown.
@@ -155,6 +168,72 @@ public class FeedBlockerService extends AccessibilityService {
         return inChats;
     }
 
+    // ---- Screen check for FB Lite (it hides its UI from accessibility) ----
+    private long lastShot = 0;
+    private boolean shotPending = false;
+    private float messengerY = -1;   // last seen y of the tab row, in pixels
+
+    private void checkFeedByScreenshot() {
+        shotPending = true;
+        try {
+            takeScreenshot(Display.DEFAULT_DISPLAY, getMainExecutor(), new TakeScreenshotCallback() {
+                @Override public void onSuccess(ScreenshotResult r) {
+                    shotPending = false;
+                    HardwareBuffer hb = r.getHardwareBuffer();
+                    Bitmap hw = Bitmap.wrapHardwareBuffer(hb, r.getColorSpace());
+                    Bitmap bmp = hw == null ? null : hw.copy(Bitmap.Config.ARGB_8888, false);
+                    hb.close();
+                    if (bmp == null) return;
+                    float tabY = findHighlightedHomeTab(bmp);
+                    int w = bmp.getWidth();
+                    bmp.recycle();
+                    if (tabY > 0) {
+                        messengerY = tabY;
+                        tap(w * 0.41f, tabY);   // Messenger icon: 3rd icon in FB Lite's tab row
+                        Toast.makeText(FeedBlockerService.this, "No newsfeed 🙅 Sent you to Messages.", Toast.LENGTH_SHORT).show();
+                    }
+                }
+                @Override public void onFailure(int code) { shotPending = false; }
+            });
+        } catch (Throwable t) { shotPending = false; }
+    }
+
+    /**
+     * FB Lite's selected tab icon is Facebook blue. If the leftmost tab (Home/newsfeed)
+     * in the top part of the screen is blue, we are on the feed. Returns its y, or -1.
+     */
+    private static float findHighlightedHomeTab(Bitmap b) {
+        int w = b.getWidth(), h = b.getHeight();
+        int x0 = (int) (w * 0.02f), x1 = (int) (w * 0.13f);
+        int y0 = (int) (h * 0.085f), y1 = (int) (h * 0.17f);   // below the "facebook" logo
+        int count = 0; long sumY = 0;
+        for (int y = y0; y < y1; y += 2) {
+            for (int x = x0; x < x1; x += 2) {
+                int c = b.getPixel(x, y);
+                int r = (c >> 16) & 0xff, g = (c >> 8) & 0xff, bl = c & 0xff;
+                // Facebook blue ~ #0866FF / #1877F2
+                if (bl > 200 && r < 90 && g > 70 && g < 175) { count++; sumY += y; }
+            }
+        }
+        // The rest of the tab row must NOT be blue (otherwise it's a blue banner, not a tab)
+        if (count < 40) return -1;
+        float y = (float) sumY / count;
+        int other = 0;
+        for (int x = (int) (w * 0.30f); x < (int) (w * 0.95f); x += 3) {
+            int c = b.getPixel(x, (int) y);
+            if ((c & 0xff) > 200 && ((c >> 16) & 0xff) < 90) other++;
+        }
+        return other > 40 ? -1 : y;
+    }
+
+    private void tap(float x, float y) {
+        Path p = new Path();
+        p.moveTo(x, y);
+        GestureDescription g = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(p, 0, 60)).build();
+        dispatchGesture(g, null, null);
+    }
+
     private int countScroll(long now) {
         int n = 0;
         for (int i = 0; i < scrollCount; i++) if (now - scrollTimes[i] <= SCROLL_WINDOW_MS) scrollTimes[n++] = scrollTimes[i];
@@ -170,6 +249,12 @@ public class FeedBlockerService extends AccessibilityService {
         currentPkg = null;
         if (openChats()) {
             Toast.makeText(this, "No feed scrolling 🙅 Sent you to Chats.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (messengerY > 0) {
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            tap(dm.widthPixels * 0.41f, messengerY);
+            Toast.makeText(this, "No feed scrolling 🙅 Sent you to Messages.", Toast.LENGTH_SHORT).show();
             return;
         }
         performGlobalAction(GLOBAL_ACTION_HOME);   // no Chats button found: fall back to Home

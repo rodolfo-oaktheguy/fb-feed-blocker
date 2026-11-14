@@ -45,7 +45,7 @@ public class MainActivity extends Activity {
 
         fb = check(l, "Block Facebook", p.getBoolean(Prefs.BLOCK_FB, true));
         lite = check(l, "Block Facebook Lite", p.getBoolean(Prefs.BLOCK_LITE, true));
-        liteFull = check(l, "Block FB Lite completely (use Messenger for messages)", p.getBoolean(Prefs.LITE_FULL, true));
+        liteFull = check(l, "Block FB Lite completely (use Messenger for messages)", p.getBoolean(Prefs.LITE_FULL, false));
         scrolls = number(l, "Scrolls allowed per minute (0 = none)", p.getInt(Prefs.SCROLL_LIMIT, 0));
         minutes = number(l, "Max minutes per visit (0 = no limit)", p.getInt(Prefs.SESSION_MIN, 0));
 
