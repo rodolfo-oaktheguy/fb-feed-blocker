@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Feed Blocker</string>
+    <string name="service_desc">Kicks you out of Facebook and Facebook Lite when you keep scrolling the feed, or when you stay too long. It only watches those two apps and sends nothing anywhere.</string>
+</resources>
